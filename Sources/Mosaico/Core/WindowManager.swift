@@ -368,7 +368,7 @@ final class WindowManager {
     private func handleFocusChange(_ window: AXWindow) {
         guard workspaceManager.locate(window.id) != nil else { return }
         noteFocus(window.id)
-        mouse.followFocus(to: window)
+        mouse.followFocus(to: window, passive: true)
     }
 
     private func handleAppActivated(_ app: NSRunningApplication) {

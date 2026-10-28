@@ -243,11 +243,17 @@ final class MouseManager {
     /// Moves the cursor to the center of the focused window, if enabled.
     /// Never during drag, never with a button held, never right after real
     /// mouse activity (clicks included — otherwise the warp steals the pointer).
-    func followFocus(to window: AXWindow) {
+    ///
+    /// `passive`: the focus change was observed (AX notification, app
+    /// activation), not caused by a Mosaico command. A click can trigger one
+    /// seconds later — a link opening in another browser window or app — so
+    /// those need a much longer mouse-quiet period than keyboard commands.
+    func followFocus(to window: AXWindow, passive: Bool = false) {
+        let quietPeriod: TimeInterval = passive ? 2.0 : 0.3
         guard SettingsStore.shared.settings.mouseFollowsFocus,
               session == nil,
               NSEvent.pressedMouseButtons == 0,
-              Date().timeIntervalSince(lastActivity) > 0.3 else { return }
+              Date().timeIntervalSince(lastActivity) > quietPeriod else { return }
 
         let frame = window.frame
         guard frame.width > 0 else { return }
