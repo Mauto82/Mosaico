@@ -13,12 +13,13 @@ final class SettingsWindowController {
         if window == nil {
             let hosting = NSHostingController(rootView: SettingsView())
             let window = NSWindow(contentViewController: hosting)
-            window.title = "Impostazioni Mosaico"
             window.styleMask = [.titled, .closable, .miniaturizable]
             window.isReleasedWhenClosed = false
             window.center()
             self.window = window
         }
+        // Set on every show: the language may have changed since creation
+        window?.title = tr("Mosaico Settings")
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }

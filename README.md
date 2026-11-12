@@ -151,7 +151,11 @@ and the settings UI all work, and the layout self-heals after sleep/wake
 and display changes. Expect occasional rough edges around less common
 window types.
 
-Current UI language is Italian; localization is on the roadmap.
+The UI is available in English and Italian. It follows the macOS language
+(including the per-app language in System Settings → General → Language &
+Region → Applications), or can be set in Settings → General → Language;
+switching takes effect immediately. Translations live in
+`Resources/<lang>.lproj/Localizable.strings`, keyed by the English text.
 
 ### Known limitations
 
@@ -170,7 +174,7 @@ Current UI language is Italian; localization is on the roadmap.
 - [ ] Developer ID signing + notarization (removes the Gatekeeper friction
       and the permission re-prompts)
 - [ ] Homebrew cask
-- [ ] English localization of the UI
+- [x] English localization of the UI
 - [ ] Per-display configuration (rules and presets per monitor)
 - [ ] Configurable auto-float rules from the GUI
 - [ ] Optional window borders / focus highlight

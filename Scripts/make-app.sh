@@ -15,6 +15,10 @@ rm -rf "$ROOT/dist"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$ROOT/.build/release/Mosaico" "$APP/Contents/MacOS/Mosaico"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
+# Traduzioni dell'interfaccia (l'inglese è la lingua sorgente, nel codice)
+for lproj in "$ROOT"/Resources/*.lproj; do
+  cp -R "$lproj" "$APP/Contents/Resources/"
+done
 if [ -f "$ROOT/Resources/AppIcon.icns" ]; then
   cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 fi

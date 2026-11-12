@@ -5,9 +5,11 @@ import SwiftUI
 struct MenuContent: View {
     @ObservedObject private var menuState = MenuState.shared
     @ObservedObject private var loginItem = LoginItem.shared
+    // Observed so a language change rebuilds the menu
+    @ObservedObject private var store = SettingsStore.shared
 
     var body: some View {
-        Section("Focus Finestra") {
+        Section(tr("Focus Window")) {
             cmd(.focus(.south), "⌥J")
             cmd(.focus(.north), "⌥K")
             cmd(.focus(.west), "⌥H")
@@ -16,14 +18,14 @@ struct MenuContent: View {
 
         Divider()
 
-        Section("Focus Display") {
+        Section(tr("Focus Display")) {
             cmd(.focusDisplay(.west), "⌥S")
             cmd(.focusDisplay(.east), "⌥G")
         }
 
         Divider()
 
-        Section("Layout") {
+        Section(tr("Layout")) {
             cmd(.rotate, "⇧⌥R")
             cmd(.mirrorY, "⇧⌥Y")
             cmd(.mirrorX, "⇧⌥X")
@@ -34,7 +36,7 @@ struct MenuContent: View {
 
         Divider()
 
-        Section("Swap Finestre") {
+        Section(tr("Swap Windows")) {
             cmd(.swap(.south), "⇧⌥J")
             cmd(.swap(.north), "⇧⌥K")
             cmd(.swap(.west), "⇧⌥H")
@@ -43,7 +45,7 @@ struct MenuContent: View {
 
         Divider()
 
-        Section("Warp Finestre") {
+        Section(tr("Warp Windows")) {
             cmd(.warp(.south), "⌃⌥J")
             cmd(.warp(.north), "⌃⌥K")
             cmd(.warp(.west), "⌃⌥H")
@@ -52,7 +54,7 @@ struct MenuContent: View {
 
         Divider()
 
-        Section("Sposta Finestra") {
+        Section(tr("Move Window")) {
             cmd(.moveToDisplay(.west), "⇧⌥S")
             cmd(.moveToDisplay(.east), "⇧⌥G")
         }
@@ -60,7 +62,7 @@ struct MenuContent: View {
         Divider()
 
         Section("Mosaico") {
-            Menu("Escludi finestra") {
+            Menu(tr("Exclude Window")) {
                 // ✓ = excluded from tiling; click to toggle
                 ForEach(menuState.windows) { info in
                     Button("\(info.isExcluded ? "✓" : "　")  \(info.appName) — \(info.title)") {
@@ -70,7 +72,7 @@ struct MenuContent: View {
 
                 if !menuState.staleRules.isEmpty {
                     Divider()
-                    Section("Regole salvate (clicca per rimuovere)") {
+                    Section(tr("Saved rules (click to remove)")) {
                         ForEach(menuState.staleRules) { rule in
                             Button("✓  \(appDisplayName(for: rule.bundleID)) — \(rule.title)") {
                                 WindowManager.shared.removeExclusionRule(rule)
@@ -80,16 +82,16 @@ struct MenuContent: View {
                 }
             }
 
-            Button("⌃⌥Q  \(menuState.isPaused ? "▶ Riprendi Tiling" : "⏸ Pausa Tiling")") {
+            Button("⌃⌥Q  \(menuState.isPaused ? tr("▶ Resume Tiling") : tr("⏸ Pause Tiling"))") {
                 WindowManager.shared.perform(.pauseResume)
             }
             cmd(.retileAll, "⌃⌥R")
 
-            Button("\(loginItem.isEnabled ? "✓" : "　")  Avvia al login") {
+            Button("\(loginItem.isEnabled ? "✓" : "　")  \(tr("Launch at Login"))") {
                 loginItem.toggle()
             }
 
-            Button("Impostazioni…") {
+            Button(tr("Settings…")) {
                 SettingsWindowController.shared.show()
             }
             .keyboardShortcut(",", modifiers: .command)
@@ -97,7 +99,7 @@ struct MenuContent: View {
 
         Divider()
 
-        Button("Esci da Mosaico") {
+        Button(tr("Quit Mosaico")) {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)

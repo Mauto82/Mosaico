@@ -304,6 +304,44 @@ enum SelfTest {
             check(keys.count == Set(keys).count, "hotkey preset without duplicates")
         }
 
+        // Every tr() key in the sources has an Italian entry with the same
+        // format specifiers (the table is read from the source tree)
+        do {
+            let italian = Localization.table(for: "it")
+            check(!italian.isEmpty, "l10n: Italian table loads")
+
+            let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            let pattern = try! NSRegularExpression(pattern: #"tr\("((?:[^"\\]|\\.)*)""#)
+            var keys = Set<String>()
+            let files = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil)?
+                .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" } ?? []
+            for file in files {
+                guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
+                for match in pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+                    let raw = String(text[Range(match.range(at: 1), in: text)!])
+                    keys.insert(raw.replacingOccurrences(of: "\\n", with: "\n")
+                                   .replacingOccurrences(of: "\\\"", with: "\""))
+                }
+            }
+            check(keys.count > 40, "l10n: keys found in sources")
+
+            func specifiers(_ s: String) -> [String] {
+                let re = try! NSRegularExpression(pattern: "%[@d]")
+                return re.matches(in: s, range: NSRange(s.startIndex..., in: s))
+                    .map { String(s[Range($0.range, in: s)!]) }
+            }
+            let missing = keys.filter { italian[$0] == nil }.sorted()
+            check(missing.isEmpty, "l10n: every key translated" + (missing.isEmpty ? "" : " — missing: \(missing)"))
+            let mismatched = italian.filter { specifiers($0.key) != specifiers($0.value) }.map(\.key).sorted()
+            check(mismatched.isEmpty, "l10n: format specifiers match" + (mismatched.isEmpty ? "" : " — \(mismatched)"))
+            check(Localization.string("Remove", language: "it") == "Rimuovi"
+                  && Localization.string("Remove", language: "en") == "Remove",
+                  "l10n: lookup per language")
+            check(Bundle.preferredLocalizations(from: Localization.supported, forPreferences: ["it-IT"]).first == "it"
+                  && Bundle.preferredLocalizations(from: Localization.supported, forPreferences: ["de-DE", "en-GB"]).first == "en",
+                  "l10n: system language resolution")
+        }
+
         print(failures == 0 ? "\nALL TESTS PASS" : "\n\(failures) TESTS FAILED")
         if failures > 0 { exit(1) }
     }

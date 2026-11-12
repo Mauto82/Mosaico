@@ -1,0 +1,67 @@
+/* Mosaico — Italian UI strings. Keys are the English source text. */
+
+/* Settings */
+"General" = "Generale";
+"Shortcuts" = "Scorciatoie";
+"Excluded Apps" = "App escluse";
+"Excluded Windows" = "Finestre escluse";
+"Layout" = "Layout";
+"Outer padding: %dpx" = "Spazio dai bordi: %dpx";
+"Gap between windows: %dpx" = "Spazio tra finestre: %dpx";
+"Mouse" = "Mouse";
+"Pointer follows the focused window" = "Il puntatore segue la finestra attiva";
+"Startup" = "Avvio";
+"Launch Mosaico at login" = "Avvia Mosaico al login";
+"macOS needs your approval" = "macOS richiede la tua approvazione";
+"Open System Settings" = "Apri Impostazioni di Sistema";
+"Language" = "Lingua";
+"System default" = "Lingua di sistema";
+"Press keys…" = "Premi i tasti…";
+"Restore default preset" = "Ripristina preset di default";
+"%@ — this window only" = "%@ — solo questa finestra";
+"Add running app…" = "Aggiungi app in esecuzione…";
+"Remove" = "Rimuovi";
+"Mosaico Settings" = "Impostazioni Mosaico";
+
+/* Menu bar */
+"Focus Window" = "Focus Finestra";
+"Focus Display" = "Focus Display";
+"Swap Windows" = "Swap Finestre";
+"Warp Windows" = "Warp Finestre";
+"Move Window" = "Sposta Finestra";
+"Exclude Window" = "Escludi finestra";
+"Saved rules (click to remove)" = "Regole salvate (clicca per rimuovere)";
+"▶ Resume Tiling" = "▶ Riprendi Tiling";
+"⏸ Pause Tiling" = "⏸ Pausa Tiling";
+"Launch at Login" = "Avvia al login";
+"Settings…" = "Impostazioni…";
+"Quit Mosaico" = "Esci da Mosaico";
+
+/* Commands */
+"Focus %@" = "Focus %@";
+"Focus Display %@" = "Focus Display %@";
+"Swap %@" = "Swap %@";
+"Warp %@" = "Warp %@";
+"Rotate Layout" = "Ruota Layout";
+"Mirror X Axis" = "Specchia Asse X";
+"Mirror Y Axis" = "Specchia Asse Y";
+"Balance Windows" = "Ribilancia Finestre";
+"Toggle Float" = "Toggle Float";
+"Zoom/Restore" = "Massimizza/Ripristina";
+"Move to Display %@" = "Sposta su Display %@";
+"Move to Space %d" = "Sposta su Spazio %d";
+"Move to Previous Space" = "Sposta su Spazio Precedente";
+"Move to Next Space" = "Sposta su Spazio Successivo";
+"Pause/Resume Tiling" = "Pausa/Riprendi Tiling";
+"Re-tile All" = "Ricalcola Tiling";
+
+/* Directions */
+"West" = "Ovest";
+"South" = "Sud";
+"North" = "Nord";
+"East" = "Est";
+
+/* Permissions onboarding */
+"Welcome to Mosaico" = "Benvenuto in Mosaico";
+"Mosaico arranges your windows" = "Mosaico organizza le tue finestre";
+"To manage other apps' windows, macOS requires the **Accessibility** permission.\n\nOpen System Settings → Privacy & Security → Accessibility and turn on Mosaico. This window closes by itself as soon as the permission is granted." = "Per gestire le finestre delle altre app, macOS richiede il permesso **Accessibilità**.\n\nApri Impostazioni di Sistema → Privacy e Sicurezza → Accessibilità e attiva Mosaico. Questa finestra si chiuderà da sola appena il permesso è attivo.";

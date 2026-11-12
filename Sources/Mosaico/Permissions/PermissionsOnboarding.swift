@@ -33,7 +33,7 @@ final class PermissionsOnboarding {
         let view = OnboardingView()
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
-        window.title = "Benvenuto in Mosaico"
+        window.title = tr("Welcome to Mosaico")
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.center()
@@ -51,19 +51,27 @@ private struct OnboardingView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
 
-            Text("Mosaico organizza le tue finestre")
+            Text(tr("Mosaico arranges your windows"))
                 .font(.title2.bold())
 
-            Text("Per gestire le finestre delle altre app, macOS richiede il permesso **Accessibilità**.\n\nApri Impostazioni di Sistema → Privacy e Sicurezza → Accessibilità e attiva Mosaico. Questa finestra si chiuderà da sola appena il permesso è attivo.")
+            Text(markdown: tr("To manage other apps' windows, macOS requires the **Accessibility** permission.\n\nOpen System Settings → Privacy & Security → Accessibility and turn on Mosaico. This window closes by itself as soon as the permission is granted."))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
 
-            Button("Apri Impostazioni di Sistema") {
+            Button(tr("Open System Settings")) {
                 let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
                 NSWorkspace.shared.open(url)
             }
             .keyboardShortcut(.defaultAction)
         }
         .padding(32)
+    }
+}
+
+private extension Text {
+    /// Inline markdown (bold) from an already translated string, keeping line breaks.
+    init(markdown: String) {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        self.init((try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown))
     }
 }

@@ -5,6 +5,26 @@ All notable changes to Mosaico are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-12
+
+### Added
+
+- English UI. English is now the source language, with Italian as a
+  translation: menubar menu, settings, command names and the permissions
+  onboarding. The language follows macOS (per-app language included) or
+  is chosen in Settings → General → Language, and switching applies at
+  once without restarting
+- Self-test checks that every UI string has an Italian translation with
+  matching format specifiers
+
+### Fixed
+
+- Clicking a link that opened in another browser window or app could pull
+  the pointer to that window's center: pointer-follows-focus fired on the
+  focus change the click itself caused, up to seconds later. Focus changes
+  Mosaico observes (rather than causes) now wait for 2 s of mouse quiet;
+  keyboard commands keep the 0.3 s guard
+
 ## [0.3.2] - 2026-09-12
 
 ### Fixed

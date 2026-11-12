@@ -26,33 +26,33 @@ enum Command: Codable, Equatable, Hashable {
     /// Title for menu and settings.
     var title: String {
         switch self {
-        case .focus(let d): return "Focus \(d.italian)"
-        case .focusDisplay(let d): return "Focus Display \(d.italian)"
-        case .swap(let d): return "Swap \(d.italian)"
-        case .warp(let d): return "Warp \(d.italian)"
-        case .rotate: return "Ruota Layout"
-        case .mirrorX: return "Specchia Asse X"
-        case .mirrorY: return "Specchia Asse Y"
-        case .balance: return "Ribilancia Finestre"
-        case .toggleFloat: return "Toggle Float"
-        case .toggleZoom: return "Massimizza/Ripristina"
-        case .moveToDisplay(let d): return "Sposta su Display \(d.italian)"
-        case .moveToWorkspace(let n): return "Sposta su Spazio \(n)"
-        case .moveToWorkspacePrev: return "Sposta su Spazio Precedente"
-        case .moveToWorkspaceNext: return "Sposta su Spazio Successivo"
-        case .pauseResume: return "Pausa/Riprendi Tiling"
-        case .retileAll: return "Ricalcola Tiling"
+        case .focus(let d): return tr("Focus %@", d.title)
+        case .focusDisplay(let d): return tr("Focus Display %@", d.title)
+        case .swap(let d): return tr("Swap %@", d.title)
+        case .warp(let d): return tr("Warp %@", d.title)
+        case .rotate: return tr("Rotate Layout")
+        case .mirrorX: return tr("Mirror X Axis")
+        case .mirrorY: return tr("Mirror Y Axis")
+        case .balance: return tr("Balance Windows")
+        case .toggleFloat: return tr("Toggle Float")
+        case .toggleZoom: return tr("Zoom/Restore")
+        case .moveToDisplay(let d): return tr("Move to Display %@", d.title)
+        case .moveToWorkspace(let n): return tr("Move to Space %d", n)
+        case .moveToWorkspacePrev: return tr("Move to Previous Space")
+        case .moveToWorkspaceNext: return tr("Move to Next Space")
+        case .pauseResume: return tr("Pause/Resume Tiling")
+        case .retileAll: return tr("Re-tile All")
         }
     }
 }
 
 extension Direction {
-    var italian: String {
+    var title: String {
         switch self {
-        case .west: return "Ovest"
-        case .south: return "Sud"
-        case .north: return "Nord"
-        case .east: return "Est"
+        case .west: return tr("West")
+        case .south: return tr("South")
+        case .north: return tr("North")
+        case .east: return tr("East")
         }
     }
 }

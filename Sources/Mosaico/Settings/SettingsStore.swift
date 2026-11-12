@@ -21,6 +21,7 @@ struct MosaicoSettings: Codable, Equatable {
     var padding: Double = 7
     var gap: Double = 7
     var mouseFollowsFocus: Bool = true
+    var language: AppLanguage = .system
     var excludedBundleIDs: [String] = MosaicoSettings.defaultExclusions
     var excludedWindowRules: [WindowRule] = []
     var bindings: [KeyBinding] = KeyBinding.defaultPreset
@@ -34,6 +35,7 @@ struct MosaicoSettings: Codable, Equatable {
         padding = try c.decodeIfPresent(Double.self, forKey: .padding) ?? 7
         gap = try c.decodeIfPresent(Double.self, forKey: .gap) ?? 7
         mouseFollowsFocus = try c.decodeIfPresent(Bool.self, forKey: .mouseFollowsFocus) ?? true
+        language = (try? c.decodeIfPresent(AppLanguage.self, forKey: .language)) ?? .system
         excludedBundleIDs = try c.decodeIfPresent([String].self, forKey: .excludedBundleIDs) ?? MosaicoSettings.defaultExclusions
         excludedWindowRules = try c.decodeIfPresent([WindowRule].self, forKey: .excludedWindowRules) ?? []
         let decoded = (try c.decodeIfPresent([Failable<KeyBinding>].self, forKey: .bindings))?.compactMap(\.value) ?? []

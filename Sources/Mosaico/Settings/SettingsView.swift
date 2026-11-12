@@ -6,17 +6,17 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             GeneralSettingsView()
-                .tabItem { Label("Generale", systemImage: "gearshape") }
+                .tabItem { Label(tr("General"), systemImage: "gearshape") }
             HotkeySettingsView()
-                .tabItem { Label("Scorciatoie", systemImage: "keyboard") }
+                .tabItem { Label(tr("Shortcuts"), systemImage: "keyboard") }
             ExclusionSettingsView()
-                .tabItem { Label("App escluse", systemImage: "rectangle.slash") }
+                .tabItem { Label(tr("Excluded Apps"), systemImage: "rectangle.slash") }
         }
         .frame(width: 520, height: 440)
     }
 }
 
-// MARK: - Generale
+// MARK: - General
 
 private struct GeneralSettingsView: View {
     @ObservedObject private var store = SettingsStore.shared
@@ -24,35 +24,43 @@ private struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Layout") {
-                LabeledContent("Spazio dai bordi: \(Int(store.settings.padding))px") {
+            Section(tr("Layout")) {
+                LabeledContent(tr("Outer padding: %dpx", Int(store.settings.padding))) {
                     Slider(value: $store.settings.padding, in: 0...40, step: 1)
                         .frame(width: 220)
                 }
-                LabeledContent("Spazio tra finestre: \(Int(store.settings.gap))px") {
+                LabeledContent(tr("Gap between windows: %dpx", Int(store.settings.gap))) {
                     Slider(value: $store.settings.gap, in: 0...40, step: 1)
                         .frame(width: 220)
                 }
             }
 
-            Section("Mouse") {
-                Toggle("Il puntatore segue la finestra attiva", isOn: $store.settings.mouseFollowsFocus)
+            Section(tr("Mouse")) {
+                Toggle(tr("Pointer follows the focused window"), isOn: $store.settings.mouseFollowsFocus)
             }
 
-            Section("Avvio") {
-                Toggle("Avvia Mosaico al login", isOn: Binding(
+            Section(tr("Startup")) {
+                Toggle(tr("Launch Mosaico at login"), isOn: Binding(
                     get: { loginItem.isEnabled },
                     set: { loginItem.set($0) }
                 ))
 
                 if loginItem.needsApproval {
                     HStack {
-                        Text("macOS richiede la tua approvazione")
+                        Text(tr("macOS needs your approval"))
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Button("Apri Impostazioni di Sistema") {
+                        Button(tr("Open System Settings")) {
                             LoginItem.openSystemSettings()
                         }
+                    }
+                }
+            }
+
+            Section(tr("Language")) {
+                Picker(tr("Language"), selection: $store.settings.language) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.nativeName).tag(language)
                     }
                 }
             }
@@ -61,7 +69,7 @@ private struct GeneralSettingsView: View {
     }
 }
 
-// MARK: - Scorciatoie
+// MARK: - Shortcuts
 
 /// UI state without @State: the CommandLineTools toolchain does not expand
 /// SwiftUI macros (SwiftUIMacros plugin absent), hence ObservableObject.
@@ -88,7 +96,7 @@ private struct HotkeySettingsView: View {
                         Button {
                             recording.value = (recordingID == binding.id) ? nil : binding.id
                         } label: {
-                            Text(recordingID == binding.id ? "Premi i tasti…" : binding.displayString)
+                            Text(recordingID == binding.id ? tr("Press keys…") : binding.displayString)
                                 .font(.system(.body, design: .monospaced))
                                 .foregroundStyle(recordingID == binding.id ? Color.accentColor : .primary)
                                 .frame(minWidth: 90)
@@ -102,7 +110,7 @@ private struct HotkeySettingsView: View {
             Divider()
 
             HStack {
-                Button("Ripristina preset di default") {
+                Button(tr("Restore default preset")) {
                     store.settings.bindings = KeyBinding.defaultPreset
                 }
                 Spacer()
@@ -167,7 +175,7 @@ private struct KeyRecorder: NSViewRepresentable {
     }
 }
 
-// MARK: - App escluse
+// MARK: - Excluded apps
 
 private struct ExclusionSettingsView: View {
     @ObservedObject private var store = SettingsStore.shared
@@ -177,7 +185,7 @@ private struct ExclusionSettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             List(selection: selected.binding) {
-                Section("App escluse") {
+                Section(tr("Excluded Apps")) {
                     ForEach(store.settings.excludedBundleIDs, id: \.self) { bundleID in
                         HStack {
                             appIcon(for: bundleID)
@@ -191,13 +199,13 @@ private struct ExclusionSettingsView: View {
                 }
 
                 if !store.settings.excludedWindowRules.isEmpty {
-                    Section("Finestre escluse") {
+                    Section(tr("Excluded Windows")) {
                         ForEach(store.settings.excludedWindowRules) { rule in
                             HStack {
                                 appIcon(for: rule.bundleID)
                                 VStack(alignment: .leading) {
                                     Text(rule.title)
-                                    Text("\(appName(for: rule.bundleID)) — solo questa finestra")
+                                    Text(tr("%@ — this window only", appName(for: rule.bundleID)))
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
@@ -216,7 +224,7 @@ private struct ExclusionSettingsView: View {
             Divider()
 
             HStack {
-                Menu("Aggiungi app in esecuzione…") {
+                Menu(tr("Add running app…")) {
                     ForEach(runningApps(), id: \.self) { app in
                         Button(app.localizedName ?? app.bundleIdentifier ?? "?") {
                             guard let id = app.bundleIdentifier,
@@ -227,7 +235,7 @@ private struct ExclusionSettingsView: View {
                 }
                 .frame(width: 220)
 
-                Button("Rimuovi") {
+                Button(tr("Remove")) {
                     if let selection {
                         store.settings.excludedBundleIDs.removeAll { $0 == selection }
                     }
