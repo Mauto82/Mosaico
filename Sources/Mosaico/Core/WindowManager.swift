@@ -9,6 +9,9 @@ final class WindowManager {
     private let lifecycle = AppLifecycleObserver()
     private let hotkeys = HotkeyManager()
     private let mouse = MouseManager()
+    private let hover = HoverFocus()
+    private var settingsObserver: NSObjectProtocol?
+    private var hoverRequest: (target: HoverFocus.Target, expires: TimeInterval)?
 
     private var reconcileTimer: Timer?
     private var isPaused = false
@@ -40,6 +43,7 @@ final class WindowManager {
     private var displayChangeWork: DispatchWorkItem?
 
     private func scheduleDisplayChangeReconcile() {
+        hover.suspend(for: 1.5)
         nativeSpaceMove?.cancel(reason: "displays changed")
         displayChangeWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
@@ -132,23 +136,36 @@ final class WindowManager {
         }
         hotkeys.register(SettingsStore.shared.settings.bindings)
         mouse.delegate = self
+        mouse.willWarpPointer = { [weak self] in self?.hover.suspend(for: 0.12) }
         mouse.start()
+        hover.hitTest = { [weak self] point in self?.hoverTarget(at: point) }
+        hover.focus = { [weak self] target in self?.focusFromHover(target) }
+        updateHoverMonitor()
 
         // Periodic reconciliation: auto-repairs lost events
         reconcileTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.reconcile()
         }
 
-        // Settings changed → re-register hotkeys and retile
-        NotificationCenter.default.addObserver(forName: .mosaicoSettingsChanged, object: nil, queue: .main) { [weak self] _ in
+        var previousSettings = SettingsStore.shared.settings
+        settingsObserver = NotificationCenter.default.addObserver(forName: .mosaicoSettingsChanged, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
-            self.hotkeys.register(SettingsStore.shared.settings.bindings)
-            self.retileAll()
+            let settings = SettingsStore.shared.settings
+            previousSettings.focusFollowsMouse = settings.focusFollowsMouse
+            if previousSettings != settings {
+                self.hotkeys.register(settings.bindings)
+                self.retileAll()
+            }
+            previousSettings = settings
+            self.updateHoverMonitor()
         }
     }
 
     func stop() {
         started = false
+        updateHoverMonitor()
+        if let settingsObserver { NotificationCenter.default.removeObserver(settingsObserver) }
+        settingsObserver = nil
         nativeSpaceMove?.cancel(reason: "window manager stopped")
         reconcileTimer?.invalidate()
         observerCenter.stopAll()
@@ -376,6 +393,13 @@ final class WindowManager {
     private func handleFocusChange(_ window: AXWindow) {
         guard workspaceManager.locate(window.id) != nil else { return }
         noteFocus(window.id)
+        if let request = hoverRequest,
+           ProcessInfo.processInfo.systemUptime < request.expires,
+           request.target.pid == window.pid {
+            // Activation can briefly report another window from the same app.
+            return
+        }
+        hoverRequest = nil
         if nativeSpaceMove == nil { mouse.followFocus(to: window, passive: true) }
     }
 
@@ -389,6 +413,7 @@ final class WindowManager {
     /// The user changed native space (Mission Control / Ctrl+arrow):
     /// updates the indicator and repairs the space that just became visible.
     private func handleSpaceChanged() {
+        hover.suspend(for: 0.35)
         guard !isPaused else { return }
         MosaicoLog.log("native space changed")
         if let move = nativeSpaceMove {
@@ -409,6 +434,7 @@ final class WindowManager {
     /// the states of the returned displays. If some display has really disappeared
     /// (unplug during standby), only then merge its windows.
     private func handleWake() {
+        hover.suspend(for: 8)
         MosaicoLog.log("wake from standby")
         nativeSpaceMove?.cancel(reason: "wake from standby")
         // For the next few seconds reconciliation does not touch the structure:
@@ -767,10 +793,46 @@ final class WindowManager {
 
     // MARK: - Commands
 
+    private func updateHoverMonitor() {
+        if started && !isPaused && SettingsStore.shared.settings.focusFollowsMouse {
+            hover.start()
+        } else {
+            hover.stop()
+        }
+    }
+
+    private func hoverTarget(at point: CGPoint) -> HoverFocus.Target? {
+        guard started, !isPaused, nativeSpaceMove == nil, !mouse.isDragging,
+              NSApp.keyWindow == nil,
+              let screen = DisplayManager.screen(containingAX: point),
+              DisplayManager.axVisibleFrame(of: screen).contains(point),
+              let hit = WindowDiscovery.hoverWindow(at: point, in: DisplayManager.axFrame(of: screen)),
+              let location = workspaceManager.locate(hit.id), location.managed.window.pid == hit.pid,
+              let desktops = SpaceTracker.desktops(for: screen),
+              location.key.space == desktops.ids[desktops.index],
+              location.key.pinnedDisplay.map({ $0 == DisplayManager.displayID(of: screen) }) ?? true
+        else { return nil }
+        return .init(id: hit.id, pid: hit.pid)
+    }
+
+    private func focusFromHover(_ target: HoverFocus.Target) {
+        guard let window = workspaceManager.locate(target.id)?.managed.window,
+              let frontApp = NSWorkspace.shared.frontmostApplication else { return }
+        if frontApp.processIdentifier == target.pid,
+           AXApplication(pid: target.pid).focusedWindow?.id == target.id { return }
+        guard !window.isMinimized, !window.isFullscreen,
+              NSEvent.pressedMouseButtons == 0, !NSEvent.modifierFlags.contains(.option),
+              hoverTarget(at: HoverFocus.pointer) == target else { return }
+
+        hoverRequest = (target, ProcessInfo.processInfo.systemUptime + 2)
+        window.focus()
+    }
+
     func perform(_ command: Command) {
         switch command {
         case .pauseResume:
             isPaused.toggle()
+            updateHoverMonitor()
             if isPaused { nativeSpaceMove?.cancel(reason: "tiling paused") }
             MenuState.shared.isPaused = isPaused
             MosaicoLog.log(isPaused ? "tiling paused" : "tiling resumed")
@@ -778,7 +840,9 @@ final class WindowManager {
             refreshMenuSnapshot()
             return
         case .retileAll:
+            hover.cancel()
             isPaused = false
+            updateHoverMonitor()
             MenuState.shared.isPaused = false
             MosaicoLog.log("recompute tiling (pause disabled)")
             reconcile(force: true)
@@ -789,6 +853,8 @@ final class WindowManager {
 
         guard !isPaused, nativeSpaceMove == nil else { return }
 
+        hover.explicitFocus()
+        hoverRequest = nil
         switch command {
         case .focus(let direction):
             focusNeighbor(direction)

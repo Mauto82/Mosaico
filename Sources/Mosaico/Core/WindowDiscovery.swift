@@ -56,6 +56,47 @@ enum WindowDiscovery {
         onScreenWindows().first { $0.bounds.contains(point) }
     }
 
+    /// Keep visible panels and menus in the hit test so they block windows below.
+    static func hoverWindow(at point: CGPoint, in display: CGRect) -> WindowSnapshot.Entry? {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
+                                                    kCGNullWindowID) as? [[String: Any]] else { return nil }
+        return hoverWindow(at: point, in: display, list: list)
+    }
+
+    static func hoverWindow(at point: CGPoint, in display: CGRect,
+                            list: [[String: Any]]) -> WindowSnapshot.Entry? {
+        let desktopLayer = CGWindowLevelForKey(.desktopWindow)
+        let menuLayer = Int(CGWindowLevelForKey(.popUpMenuWindow))
+        if list.contains(where: { info in
+            guard let layer = info[kCGWindowLayer as String] as? Int else { return false }
+            return layer == menuLayer && info[kCGWindowAlpha as String] as? Double != 0
+        }) { return nil }
+        // Dock owns Mission Control's display-sized overlay. Block the entire
+        // affected display, including gaps between the window previews.
+        if list.contains(where: { info in
+            guard info[kCGWindowOwnerName as String] as? String == "Dock",
+                  let layer = info[kCGWindowLayer as String] as? Int, layer > 0,
+                  let alpha = info[kCGWindowAlpha as String] as? Double, alpha > 0,
+                  let bounds = windowBounds(info) else { return false }
+            return bounds.contains(display)
+        }) { return nil }
+
+        for info in list {
+            guard let layer = info[kCGWindowLayer as String] as? Int, layer > desktopLayer,
+                  info[kCGWindowAlpha as String] as? Double != 0,
+                  let bounds = windowBounds(info), bounds.contains(point) else { continue }
+            guard let id = info[kCGWindowNumber as String] as? UInt32,
+                  let owner = info[kCGWindowOwnerPID as String] as? Int32 else { return nil }
+            return .init(id: id, pid: owner, bounds: bounds)
+        }
+        return nil
+    }
+
+    private static func windowBounds(_ info: [String: Any]) -> CGRect? {
+        guard let bounds = info[kCGWindowBounds as String] as? NSDictionary else { return nil }
+        return CGRect(dictionaryRepresentation: bounds)
+    }
+
     static func onScreenBounds(of id: WindowID) -> CGRect? {
         onScreenWindows().first { $0.id == id }?.bounds
     }

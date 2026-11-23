@@ -21,6 +21,7 @@ protocol MouseManagerDelegate: AnyObject {
 /// dispatched to main.
 final class MouseManager {
     weak var delegate: MouseManagerDelegate?
+    var willWarpPointer: (() -> Void)?
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -271,6 +272,7 @@ final class MouseManager {
 
         // No CGAssociateMouseAndMouseCursorPosition here: the pointer is
         // never dissociated, and calling it resets the cursor appearance.
+        willWarpPointer?()
         CGWarpMouseCursorPosition(center)
     }
 }

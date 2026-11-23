@@ -87,6 +87,10 @@ struct MenuContent: View {
             }
             cmd(.retileAll, "⌃⌥R")
 
+            Button("\(store.settings.focusFollowsMouse ? "✓" : "　")  \(tr("Focus follows mouse"))") {
+                store.settings.focusFollowsMouse.toggle()
+            }
+
             Button("\(loginItem.isEnabled ? "✓" : "　")  \(tr("Launch at Login"))") {
                 loginItem.toggle()
             }
