@@ -48,9 +48,22 @@ enum WindowDiscovery {
     }
 
     static func snapshot() -> WindowSnapshot {
+        WindowSnapshot(entries: onScreenWindows().sorted { $0.id < $1.id })
+    }
+
+    /// The frontmost ordinary window at a screen coordinate.
+    static func frontWindow(at point: CGPoint) -> WindowSnapshot.Entry? {
+        onScreenWindows().first { $0.bounds.contains(point) }
+    }
+
+    static func onScreenBounds(of id: WindowID) -> CGRect? {
+        onScreenWindows().first { $0.id == id }?.bounds
+    }
+
+    private static func onScreenWindows() -> [WindowSnapshot.Entry] {
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
                                                     kCGNullWindowID) as? [[String: Any]] else {
-            return WindowSnapshot(entries: [])
+            return []
         }
         var entries: [WindowSnapshot.Entry] = []
         for info in list {
@@ -61,8 +74,7 @@ enum WindowDiscovery {
                   let bounds = CGRect(dictionaryRepresentation: boundsDict) else { continue }
             entries.append(.init(id: number, pid: pid_t(owner), bounds: bounds))
         }
-        entries.sort { $0.id < $1.id }
-        return WindowSnapshot(entries: entries)
+        return entries
     }
 
     /// AX windows of an app with retry/backoff (just-launched apps

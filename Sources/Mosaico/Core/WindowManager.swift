@@ -40,6 +40,7 @@ final class WindowManager {
     private var displayChangeWork: DispatchWorkItem?
 
     private func scheduleDisplayChangeReconcile() {
+        nativeSpaceMove?.cancel(reason: "displays changed")
         displayChangeWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
@@ -147,12 +148,13 @@ final class WindowManager {
     }
 
     func stop() {
+        started = false
+        nativeSpaceMove?.cancel(reason: "window manager stopped")
         reconcileTimer?.invalidate()
         observerCenter.stopAll()
         lifecycle.stop()
         hotkeys.unregisterAll()
         mouse.stop()
-        started = false
     }
 
     // MARK: - App/window adoption
@@ -294,6 +296,8 @@ final class WindowManager {
 
     private func removeApp(pid: pid_t) {
         observerCenter.stopObserving(pid: pid)
+        let move = nativeSpaceMove
+        let movingAppExited = move.flatMap { workspaceManager.locate($0.windowID) }?.managed.window.pid == pid
         // The runtime exclusions of the terminated app are no longer needed
         runtimeExcluded = runtimeExcluded.filter { $0.value.managed.window.pid != pid }
         var touched: [Workspace] = []
@@ -308,6 +312,7 @@ final class WindowManager {
             applyLayoutIfVisible(ws)
         }
         refreshMenuSnapshot()
+        if movingAppExited { move?.cancel(reason: "application quit") }
     }
 
     private func remove(windowID: WindowID) {
@@ -316,6 +321,9 @@ final class WindowManager {
         if focusedWindowID == windowID { focusedWindowID = nil }
         applyLayoutIfVisible(loc.workspace)
         refreshMenuSnapshot()
+        if let move = nativeSpaceMove, move.windowID == windowID {
+            move.cancel(reason: "window removed")
+        }
     }
 
     // MARK: - AX events
@@ -368,7 +376,7 @@ final class WindowManager {
     private func handleFocusChange(_ window: AXWindow) {
         guard workspaceManager.locate(window.id) != nil else { return }
         noteFocus(window.id)
-        mouse.followFocus(to: window, passive: true)
+        if nativeSpaceMove == nil { mouse.followFocus(to: window, passive: true) }
     }
 
     private func handleAppActivated(_ app: NSRunningApplication) {
@@ -383,6 +391,10 @@ final class WindowManager {
     private func handleSpaceChanged() {
         guard !isPaused else { return }
         MosaicoLog.log("native space changed")
+        if let move = nativeSpaceMove {
+            move.spaceDidChange()
+            return
+        }
         for screen in NSScreen.screens {
             applyLayout(workspace: workspaceManager.activeWorkspace(for: screen), screen: screen)
         }
@@ -398,6 +410,7 @@ final class WindowManager {
     /// (unplug during standby), only then merge its windows.
     private func handleWake() {
         MosaicoLog.log("wake from standby")
+        nativeSpaceMove?.cancel(reason: "wake from standby")
         // For the next few seconds reconciliation does not touch the structure:
         // it only re-applies the saved tree. AX/space queries are unstable
         // right after wake and would rebuild the trees, losing the positions.
@@ -575,7 +588,7 @@ final class WindowManager {
     private var lastReconcileSnapshot: WindowDiscovery.WindowSnapshot?
 
     private func reconcile(force: Bool = false) {
-        guard !isPaused, started else { return }
+        guard !isPaused, started, nativeSpaceMove == nil else { return }
         guard NSEvent.pressedMouseButtons == 0 else { return }
         // A gesture just ended: its adoption is still pending, re-applying
         // now would snap the window back to its pre-resize size.
@@ -735,7 +748,7 @@ final class WindowManager {
     /// Applies the layout ONLY if the workspace is the visible one
     /// (current native space + active virtual workspace).
     private func applyLayout(workspace: Workspace, screen: NSScreen) {
-        guard !isPaused, workspaceManager.isVisible(workspace) else { return }
+        guard !isPaused, nativeSpaceMove == nil, workspaceManager.isVisible(workspace) else { return }
         LayoutEngine.apply(workspace: workspace, on: screen)
         rebuildHitTestCache()
     }
@@ -758,6 +771,7 @@ final class WindowManager {
         switch command {
         case .pauseResume:
             isPaused.toggle()
+            if isPaused { nativeSpaceMove?.cancel(reason: "tiling paused") }
             MenuState.shared.isPaused = isPaused
             MosaicoLog.log(isPaused ? "tiling paused" : "tiling resumed")
             if !isPaused { reconcile() }
@@ -773,7 +787,7 @@ final class WindowManager {
             break
         }
 
-        guard !isPaused else { return }
+        guard !isPaused, nativeSpaceMove == nil else { return }
 
         switch command {
         case .focus(let direction):
@@ -830,16 +844,13 @@ final class WindowManager {
             moveToDisplay(direction)
 
         case .moveToWorkspace(let n):
-            moveToNativeSpace(n)
+            moveToNativeSpace { _ in n - 1 }
 
         case .moveToWorkspacePrev, .moveToWorkspaceNext:
-            guard let screen = NSScreen.main ?? NSScreen.screens.first,
-                  let ordinal = SpaceTracker.currentSpaceOrdinal(for: screen) else { return }
             let delta = (command == .moveToWorkspacePrev) ? -1 : 1
-            var target = ordinal.current + delta
-            if target < 1 { target = ordinal.total }
-            if target > ordinal.total { target = 1 }
-            moveToNativeSpace(target)
+            moveToNativeSpace { desktops in
+                (desktops.index + delta + desktops.ids.count) % desktops.ids.count
+            }
 
         case .pauseResume, .retileAll:
             break
@@ -987,38 +998,77 @@ final class WindowManager {
         mouse.followFocus(to: loc.managed.window)
     }
 
-    /// Moves the focused window to a native space: "grabs" it with a
-    /// simulated mouse-down on the titlebar, changes space with Ctrl+N (Mission
-    /// Control carries the grabbed window), then releases. Same technique
-    /// used by yabai without a scripting addition.
-    private func moveToNativeSpace(_ number: Int) {
-        guard let loc = focusedLocation(),
+    private var nativeSpaceMove: NativeSpaceMove?
+
+    private func moveToNativeSpace(select: (SpaceTracker.Desktops) -> Int) {
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              let focused = AXApplication(pid: app.processIdentifier).focusedWindow,
+              let loc = workspaceManager.locate(focused.id),
               let screen = workspaceManager.screen(showing: loc.key),
-              let key = EventPoster.digitKeyCode(number),
-              let ordinal = SpaceTracker.currentSpaceOrdinal(for: screen),
-              number != ordinal.current, number <= ordinal.total else { return }
-
+              let desktops = SpaceTracker.desktops(for: screen) else {
+            MosaicoLog.log("space move skipped: no focused managed window on a visible Desktop")
+            return
+        }
+        let index = select(desktops)
+        if index == desktops.index { return }
         let window = loc.managed.window
-        let frame = window.frame
-        let grabPoint = CGPoint(x: frame.midX, y: frame.minY + 8)   // titlebar
-
-        MosaicoLog.log("moveToNativeSpace [\(window.id)] → space \(number)")
-
-        // Out of the tree immediately, so the old space recompacts
-        loc.workspace.remove(loc.managed.id)
-        applyLayoutIfVisible(loc.workspace)
+        guard desktops.ids.indices.contains(index), let key = EventPoster.digitKeyCode(index + 1) else {
+            MosaicoLog.log("space move [\(window.id)] skipped: Desktop \(index + 1) has no supported shortcut")
+            return
+        }
+        let source = desktops.ids[desktops.index]
+        let destination = desktops.ids[index]
+        guard SpaceTracker.spaces(of: window.id) == [source], window.isMovable,
+              NSEvent.pressedMouseButtons == 0, !mouse.isDragging, CGPreflightPostEventAccess() else {
+            MosaicoLog.log("space move [\(window.id)] skipped: window, mouse, or event posting unavailable")
+            return
+        }
 
         window.focus()
-        EventPoster.postMouse(.leftMouseDown, at: grabPoint)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            EventPoster.postCtrlKey(key)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                EventPoster.postMouse(.leftMouseUp, at: grabPoint)
-                // Reconciliation relocates the window into the new space's tree
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-                    self?.reconcile()
-                }
+        let move = NativeSpaceMove(window: window, source: source, destination: destination,
+                                   displayID: DisplayManager.displayID(of: screen), key: key) { [weak self] outcome, activeSpace in
+            self?.finishNativeSpaceMove(outcome, activeSpace: activeSpace)
+        }
+        nativeSpaceMove = move
+        // Invalidate frame retries already scheduled before we froze layout.
+        for state in workspaceManager.spaces.values { state.workspace.layoutGeneration += 1 }
+        MosaicoLog.log("space move [\(window.id)] \(source) → \(destination) (Desktop \(index + 1))")
+        move.start()
+    }
+
+    private func finishNativeSpaceMove(_ outcome: NativeSpaceMove.Outcome, activeSpace: NativeSpaceID?) {
+        guard let move = nativeSpaceMove else { return }
+        nativeSpaceMove = nil
+
+        let result: String
+        switch outcome {
+        case .moved(let actual):
+            result = actual == move.destination ? "confirmed on \(actual)" : "landed on unexpected Space \(actual)"
+            let originalScreen = DisplayManager.screen(withDisplayID: move.displayID)
+            let spaces = SpaceTracker.activeSpacesByDisplay()
+            let showing = NSScreen.screens.filter { SpaceTracker.currentSpace(for: $0, in: spaces) == actual }
+            if let loc = workspaceManager.locate(move.windowID), loc.key.space != actual,
+               let screen = showing.first(where: { $0 == originalScreen }) ?? showing.first ?? originalScreen {
+                let key = workspaceManager.key(space: actual, on: screen)
+                let destination = workspaceManager.spaceState(for: key).workspace
+                loc.workspace.remove(move.windowID)
+                destination.add(loc.managed, near: insertionAnchor(in: destination, excluding: move.windowID),
+                                leafRect: { [weak self] in self?.frameOfLeaf($0, in: destination) })
             }
+        case .stayed:
+            result = activeSpace == move.source ? "Desktop did not switch" : "window stayed on source Space"
+        case .unknown:
+            result = "window membership could not be confirmed"
+        case .cancelled(let reason):
+            result = reason
+        }
+        MosaicoLog.log("space move [\(move.windowID)] \(move.source) → \(move.destination): \(result), active=\(activeSpace.map(String.init) ?? "?")")
+        lastReconcileSnapshot = nil
+        guard started, !isPaused else { return }
+        retileAll()
+        refreshMenuSnapshot()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.reconcile()
         }
     }
 
