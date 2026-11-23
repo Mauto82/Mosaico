@@ -112,6 +112,19 @@ final class AXWindow {
         set { setFrame(newValue) }
     }
 
+    /// Skip controls such as a browser's address field or toolbar buttons.
+    /// A blank Accessibility element is only a candidate for a native drag.
+    func isOverControl(at point: CGPoint) -> Bool {
+        var hit: AXUIElement?
+        let app = AXUIElementCreateApplication(pid)
+        guard AXUIElementCopyElementAtPosition(app, Float(point.x), Float(point.y), &hit) == .success,
+              let hit else { return false }
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(hit, kAXRoleAttribute as CFString, &value) == .success,
+              let role = value as? String else { return false }
+        return ![kAXWindowRole, kAXGroupRole, kAXToolbarRole, kAXStaticTextRole].contains(role)
+    }
+
     /// "Set twice" trick (Rectangle): position → size → size, some apps
     /// apply the resize only after the move or clamp it on the first hit.
     func setFrame(_ rect: CGRect) {

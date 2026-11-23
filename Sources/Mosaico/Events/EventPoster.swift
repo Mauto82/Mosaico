@@ -4,20 +4,31 @@ import Carbon.HIToolbox
 /// Posting of synthetic mouse/keyboard events (to drive Mission Control:
 /// space switching via Ctrl+N and window transport with a simulated drag).
 enum EventPoster {
+    private static let windowDragTag: Int64 = 0x4D6F736169636F
 
-    static func postMouse(_ type: CGEventType, button: CGMouseButton = .left, at point: CGPoint) {
-        guard let event = CGEvent(mouseEventSource: nil, mouseType: type,
-                                  mouseCursorPosition: point, mouseButton: button) else { return }
-        event.post(tap: .cghidEventTap)
+    static func isWindowDragEvent(_ event: CGEvent) -> Bool {
+        event.getIntegerValueField(.eventSourceUserData) == windowDragTag
+    }
+
+    static func windowDragEvent(_ type: CGEventType, at point: CGPoint) -> CGEvent? {
+        guard let event = CGEvent(mouseEventSource: CGEventSource(stateID: .hidSystemState), mouseType: type,
+                                  mouseCursorPosition: point, mouseButton: .left) else { return nil }
+        event.flags = []
+        event.setIntegerValueField(.eventSourceUserData, value: windowDragTag)
+        event.setIntegerValueField(.mouseEventClickState, value: type == .mouseMoved ? 0 : 1)
+        return event
     }
 
     /// Ctrl + key (keycode) — keyDown and keyUp.
-    static func postCtrlKey(_ keyCode: CGKeyCode) {
-        for down in [true, false] {
-            guard let event = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: down) else { continue }
+    static func postCtrlKey(_ keyCode: CGKeyCode) -> Bool {
+        let source = CGEventSource(stateID: .hidSystemState)
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else { return false }
+        for event in [down, up] {
             event.flags = .maskControl
             event.post(tap: .cghidEventTap)
         }
+        return true
     }
 
     /// Keycode of digit 1..9 (top row).

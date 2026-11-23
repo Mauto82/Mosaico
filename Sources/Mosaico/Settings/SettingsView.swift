@@ -37,6 +37,7 @@ private struct GeneralSettingsView: View {
 
             Section(tr("Mouse")) {
                 Toggle(tr("Pointer follows the focused window"), isOn: $store.settings.mouseFollowsFocus)
+                Toggle(tr("Focus follows mouse"), isOn: $store.settings.focusFollowsMouse)
             }
 
             Section(tr("Startup")) {
