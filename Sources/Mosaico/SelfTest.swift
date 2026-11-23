@@ -18,6 +18,39 @@ enum SelfTest {
     static func run() {
         let rect = CGRect(x: 0, y: 0, width: 1000, height: 600)
 
+        // Window membership may be unreadable or overlap during the transition.
+        do {
+            var move = NativeSpaceMove.Verification(source: 4, destination: 62)
+            check(move.observe([4, 62], timedOut: false) == nil, "space move waits for single membership")
+            check(move.observe([62], timedOut: false) == nil, "space move waits for confirmation")
+            check(move.observe([62], timedOut: false) == .moved(62), "space move confirms destination")
+        }
+        do {
+            var move = NativeSpaceMove.Verification(source: 4, destination: 62)
+            check(move.observe([4], timedOut: false) == nil, "space move gives native transfer time")
+            check(move.observe([4], timedOut: true) == .stayed, "space move timeout keeps the source slot")
+        }
+        do {
+            var move = NativeSpaceMove.Verification(source: 4, destination: 62)
+            check(move.observe([29], timedOut: false) == nil, "space move waits for requested destination")
+            check(move.observe([29], timedOut: true) == .moved(29), "space move reports observed destination")
+            check(move.observe([], timedOut: true) == .unknown, "space move timeout does not guess membership")
+        }
+        do {
+            check(NativeSpaceMove.didMove(from: rect, to: rect.offsetBy(dx: 4, dy: 7)),
+                  "space move accepts a translated window")
+            check(!NativeSpaceMove.didMove(from: rect, to: rect), "space move rejects an ungrabbed window")
+            check(!NativeSpaceMove.didMove(from: rect, to: rect.insetBy(dx: 8, dy: 8)),
+                  "space move rejects a title-bar resize")
+        }
+        do {
+            let synthetic = EventPoster.windowDragEvent(.leftMouseUp, at: .zero)
+            let ordinary = CGEvent(source: nil)
+            check(synthetic.map(EventPoster.isWindowDragEvent) == true &&
+                  ordinary.map(EventPoster.isWindowDragEvent) == false,
+                  "mouse tap can identify the synthetic Space drag")
+        }
+
         func liveRect(_ tree: BSPTree) -> (WindowID) -> CGRect? {
             { id in tree.frames(in: rect, gap: 0)[id] }
         }

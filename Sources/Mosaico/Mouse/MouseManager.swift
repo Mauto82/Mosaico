@@ -125,6 +125,12 @@ final class MouseManager {
             return Unmanaged.passUnretained(event)
         }
 
+        // macOS handles this drag. Feeding it back into our drop handler can
+        // move an unrelated tile when the synthetic mouse-up lands.
+        if EventPoster.isWindowDragEvent(event) {
+            return Unmanaged.passUnretained(event)
+        }
+
         let point = event.location   // CG/AX coordinates
         let altDown = event.flags.contains(.maskAlternate)
         lastActivity = Date()
