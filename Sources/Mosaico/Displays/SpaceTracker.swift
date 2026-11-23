@@ -58,6 +58,21 @@ enum SpaceTracker {
         let ids: [NativeSpaceID]
     }
 
+    static func desktopShortcut(number: Int) -> EventPoster.KeyboardShortcut? {
+        // Mission Control's "Switch to Desktop 1" symbolic hotkey ID is 118.
+        guard (1...16).contains(number) else { return nil }
+        let id = UInt32(117 + number)
+        guard CGSIsSymbolicHotKeyEnabled(id) else { return nil }
+
+        var keyEquivalent: UInt16 = 0
+        var keyCode: UInt16 = 0
+        var modifiers: UInt32 = 0
+        guard CGSGetSymbolicHotKeyValue(id, &keyEquivalent, &keyCode, &modifiers) == .success else {
+            return nil
+        }
+        return EventPoster.KeyboardShortcut(keyEquivalent: keyEquivalent, keyCode: keyCode, modifiers: modifiers)
+    }
+
     /// Ordered regular Desktops on the display, excluding fullscreen Spaces.
     static func desktops(for screen: NSScreen) -> Desktops? {
         guard let raw = CGSCopyManagedDisplaySpaces(CGSMainConnectionID())?.takeRetainedValue() as? [[String: Any]] else {

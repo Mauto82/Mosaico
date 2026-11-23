@@ -39,7 +39,7 @@ final class NativeSpaceMove {
     let destination: NativeSpaceID
     let displayID: CGDirectDisplayID
     private let window: AXWindow
-    private let key: CGKeyCode
+    private let shortcut: EventPoster.KeyboardShortcut
     private let completion: (Outcome, NativeSpaceID?) -> Void
 
     private var nextStep: DispatchWorkItem?
@@ -48,13 +48,13 @@ final class NativeSpaceMove {
     private var finished = false
 
     init(window: AXWindow, source: NativeSpaceID, destination: NativeSpaceID,
-         displayID: CGDirectDisplayID, key: CGKeyCode,
+         displayID: CGDirectDisplayID, shortcut: EventPoster.KeyboardShortcut,
          completion: @escaping (Outcome, NativeSpaceID?) -> Void) {
         self.window = window
         self.source = source
         self.destination = destination
         self.displayID = displayID
-        self.key = key
+        self.shortcut = shortcut
         self.completion = completion
     }
 
@@ -161,7 +161,7 @@ final class NativeSpaceMove {
     }
 
     private func switchSpace() {
-        guard activeSpace == source, EventPoster.postCtrlKey(key) else {
+        guard activeSpace == source, EventPoster.postShortcut(shortcut) else {
             finish(.cancelled("could not send Mission Control shortcut from source Space"))
             return
         }

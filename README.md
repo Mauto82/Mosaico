@@ -46,8 +46,9 @@ the terminal-heavy setup those tools require.
 
 - macOS 14 or later (Apple Silicon and Intel)
 - Accessibility permission (requested on first launch)
-- For the move-to-space hotkeys (⇧⌥1…7): the Mission Control keyboard
-  shortcuts ⌃1…⌃7 must be enabled in System Settings → Keyboard → Shortcuts
+- For the move-to-space hotkeys (⇧⌥1…7), enable the corresponding
+  “Switch to Desktop” shortcuts in System Settings → Keyboard → Keyboard
+  Shortcuts → Mission Control. Mosaico uses the configured key combinations.
 
 ## Installation
 
@@ -139,7 +140,7 @@ AltTab). It does **not** require disabling SIP and does **not** inject a
 scripting addition.
 
 Moving a window to another space works by simulating a titlebar grab while
-triggering the native ⌃N Mission Control switch, which carries the window
+triggering the configured Mission Control shortcut, which carries the window
 along — the same technique yabai uses when running without its scripting
 addition.
 

@@ -100,6 +100,20 @@ enum SelfTest {
                   ordinary.map(EventPoster.isWindowDragEvent) == false,
                   "mouse tap can identify the synthetic Space drag")
         }
+        do {
+            let optionTwo = EventPoster.KeyboardShortcut(keyEquivalent: 50, keyCode: 19, modifiers: 0x80000)
+            check(optionTwo?.keyCode == 19 && optionTwo?.flags == .maskAlternate,
+                  "desktop shortcut keeps the configured Option modifier")
+            let controlTwo = EventPoster.KeyboardShortcut(keyEquivalent: .max, keyCode: 19, modifiers: 0x40000)
+            check(controlTwo?.keyCode == 19 && controlTwo?.flags == .maskControl,
+                  "desktop shortcut accepts a key code without a character")
+            let commandA = EventPoster.KeyboardShortcut(keyEquivalent: 97, keyCode: 0, modifiers: 0x100000)
+            check(commandA?.keyCode == 0 && commandA?.flags == .maskCommand,
+                  "desktop shortcut supports a remapped key")
+            check(EventPoster.KeyboardShortcut(keyEquivalent: .max, keyCode: 0, modifiers: 0) == nil &&
+                  EventPoster.KeyboardShortcut(keyEquivalent: .max, keyCode: .max, modifiers: 0) == nil,
+                  "desktop shortcut ignores unassigned keys")
+        }
 
         func liveRect(_ tree: BSPTree) -> (WindowID) -> CGRect? {
             { id in tree.frames(in: rect, gap: 0)[id] }

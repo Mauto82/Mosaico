@@ -1078,8 +1078,12 @@ final class WindowManager {
         let index = select(desktops)
         if index == desktops.index { return }
         let window = loc.managed.window
-        guard desktops.ids.indices.contains(index), let key = EventPoster.digitKeyCode(index + 1) else {
-            MosaicoLog.log("space move [\(window.id)] skipped: Desktop \(index + 1) has no supported shortcut")
+        guard desktops.ids.indices.contains(index) else {
+            MosaicoLog.log("space move [\(window.id)] skipped: Desktop \(index + 1) is unavailable")
+            return
+        }
+        guard let shortcut = SpaceTracker.desktopShortcut(number: index + 1) else {
+            MosaicoLog.log("space move [\(window.id)] skipped: Desktop \(index + 1) has no enabled Mission Control shortcut")
             return
         }
         let source = desktops.ids[desktops.index]
@@ -1092,7 +1096,8 @@ final class WindowManager {
 
         window.focus()
         let move = NativeSpaceMove(window: window, source: source, destination: destination,
-                                   displayID: DisplayManager.displayID(of: screen), key: key) { [weak self] outcome, activeSpace in
+                                   displayID: DisplayManager.displayID(of: screen),
+                                   shortcut: shortcut) { [weak self] outcome, activeSpace in
             self?.finishNativeSpaceMove(outcome, activeSpace: activeSpace)
         }
         nativeSpaceMove = move
