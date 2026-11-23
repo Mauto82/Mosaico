@@ -18,6 +18,103 @@ enum SelfTest {
     static func run() {
         let rect = CGRect(x: 0, y: 0, width: 1000, height: 600)
 
+        do {
+            let decoder = JSONDecoder()
+            let legacy = Data(#"{"gap":13,"mouseFollowsFocus":false}"#.utf8)
+            let settings = try? decoder.decode(MosaicoSettings.self, from: legacy)
+            check(settings?.focusFollowsMouse == false && settings?.mouseFollowsFocus == false &&
+                  settings?.gap == 13, "legacy settings default hover focus off and preserve saved preferences")
+            for enabled in [false, true] {
+                var updated = MosaicoSettings()
+                updated.focusFollowsMouse = enabled
+                let encoded = try? JSONEncoder().encode(updated)
+                let decoded = encoded.flatMap { try? decoder.decode(MosaicoSettings.self, from: $0) }
+                check(decoded == updated, "hover focus preference round-trips when \(enabled)")
+            }
+        }
+        do {
+            let first = HoverFocus.Target(id: 11, pid: 1)
+            let second = HoverFocus.Target(id: 12, pid: 1)
+            var dwell = HoverFocus.Dwell()
+            check(dwell.observe(first, at: 0) == nil && dwell.observe(second, at: 0.1) == nil &&
+                  dwell.observe(second, at: 0.2) == nil && dwell.observe(second, at: 0.26) == second,
+                  "hover focuses only after a continuous dwell on the same target")
+            check(dwell.observe(second, at: 0.5) == nil, "hover only attempts each target once per visit")
+            dwell = HoverFocus.Dwell(blocking: first)
+            check(dwell.observe(first, at: 1) == nil && dwell.observe(first, at: 2) == nil &&
+                  dwell.deadline == nil, "explicit focus blocks the window already under the pointer")
+            _ = dwell.observe(nil, at: 2.1)
+            _ = dwell.observe(first, at: 2.2)
+            dwell.cancelPending()
+            check(dwell.deadline == nil && dwell.observe(first, at: 3) == nil &&
+                  dwell.observe(first, at: 3.2) == first, "cancelled hover requires a fresh dwell")
+        }
+        do {
+            func surface(_ id: WindowID, layer: Int = 0, alpha: Double = 1) -> [String: Any] {
+                [kCGWindowNumber as String: id, kCGWindowOwnerPID as String: Int32(123),
+                 kCGWindowLayer as String: layer, kCGWindowAlpha as String: alpha,
+                 kCGWindowBounds as String: rect.dictionaryRepresentation]
+            }
+            let point = CGPoint(x: 50, y: 50)
+            check(WindowDiscovery.hoverWindow(at: point, in: rect,
+                                               list: [surface(8, layer: 3), surface(9)])?.id == 8,
+                  "hover hit testing keeps foreground panels ahead of ordinary windows")
+            check(WindowDiscovery.hoverWindow(at: point, in: rect,
+                                               list: [surface(8, alpha: 0), surface(9)])?.id == 9,
+                  "hover hit testing skips fully transparent surfaces")
+            let menuLayer = Int(CGWindowLevelForKey(.popUpMenuWindow))
+            check(WindowDiscovery.hoverWindow(at: point, in: rect,
+                                               list: [surface(8, layer: menuLayer), surface(9)]) == nil,
+                  "an open menu suspends hover focus")
+        }
+
+        // Window membership may be unreadable or overlap during the transition.
+        do {
+            var move = NativeSpaceMove.Verification(source: 4, destination: 62)
+            check(move.observe([4, 62], timedOut: false) == nil, "space move waits for single membership")
+            check(move.observe([62], timedOut: false) == nil, "space move waits for confirmation")
+            check(move.observe([62], timedOut: false) == .moved(62), "space move confirms destination")
+        }
+        do {
+            var move = NativeSpaceMove.Verification(source: 4, destination: 62)
+            check(move.observe([4], timedOut: false) == nil, "space move gives native transfer time")
+            check(move.observe([4], timedOut: true) == .stayed, "space move timeout keeps the source slot")
+        }
+        do {
+            var move = NativeSpaceMove.Verification(source: 4, destination: 62)
+            check(move.observe([29], timedOut: false) == nil, "space move waits for requested destination")
+            check(move.observe([29], timedOut: true) == .moved(29), "space move reports observed destination")
+            check(move.observe([], timedOut: true) == .unknown, "space move timeout does not guess membership")
+        }
+        do {
+            check(NativeSpaceMove.didMove(from: rect, to: rect.offsetBy(dx: 4, dy: 7)),
+                  "space move accepts a translated window")
+            check(!NativeSpaceMove.didMove(from: rect, to: rect), "space move rejects an ungrabbed window")
+            check(!NativeSpaceMove.didMove(from: rect, to: rect.insetBy(dx: 8, dy: 8)),
+                  "space move rejects a title-bar resize")
+        }
+        do {
+            let synthetic = EventPoster.windowDragEvent(.leftMouseUp, at: .zero)
+            let ordinary = CGEvent(source: nil)
+            check(synthetic.map(EventPoster.isWindowDragEvent) == true &&
+                  ordinary.map(EventPoster.isWindowDragEvent) == false,
+                  "mouse tap can identify the synthetic Space drag")
+        }
+        do {
+            let optionTwo = EventPoster.KeyboardShortcut(keyEquivalent: 50, keyCode: 19, modifiers: 0x80000)
+            check(optionTwo?.keyCode == 19 && optionTwo?.flags == .maskAlternate,
+                  "desktop shortcut keeps the configured Option modifier")
+            let controlTwo = EventPoster.KeyboardShortcut(keyEquivalent: .max, keyCode: 19, modifiers: 0x40000)
+            check(controlTwo?.keyCode == 19 && controlTwo?.flags == .maskControl,
+                  "desktop shortcut accepts a key code without a character")
+            let commandA = EventPoster.KeyboardShortcut(keyEquivalent: 97, keyCode: 0, modifiers: 0x100000)
+            check(commandA?.keyCode == 0 && commandA?.flags == .maskCommand,
+                  "desktop shortcut supports a remapped key")
+            check(EventPoster.KeyboardShortcut(keyEquivalent: .max, keyCode: 0, modifiers: 0) == nil &&
+                  EventPoster.KeyboardShortcut(keyEquivalent: .max, keyCode: .max, modifiers: 0) == nil,
+                  "desktop shortcut ignores unassigned keys")
+        }
+
         func liveRect(_ tree: BSPTree) -> (WindowID) -> CGRect? {
             { id in tree.frames(in: rect, gap: 0)[id] }
         }

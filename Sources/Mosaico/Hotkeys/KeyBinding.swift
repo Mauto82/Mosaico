@@ -8,7 +8,7 @@ struct KeyBinding: Codable, Equatable, Hashable, Identifiable {
 
     var id: String { "\(keyCode)-\(carbonModifiers)" }
 
-    /// Default preset: 1:1 translation of skhdrc + workspace switching ctrl-1..7.
+    /// Default preset adapted from skhdrc.
     static let defaultPreset: [KeyBinding] = {
         let alt = UInt32(optionKey)
         let shiftAlt = UInt32(optionKey | shiftKey)
@@ -55,7 +55,7 @@ struct KeyBinding: Codable, Equatable, Hashable, Identifiable {
         b.append(.init(keyCode: UInt32(kVK_ANSI_N), carbonModifiers: shiftAlt, command: .moveToWorkspaceNext))
 
         // Move to native space 1..7: shift+alt-1..7.
-        // Space switching stays with Mission Control (system Ctrl+N).
+        // Mission Control supplies the shortcut for the actual desktop switch.
         let digits: [Int] = [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6, kVK_ANSI_7]
         for (i, key) in digits.enumerated() {
             b.append(.init(keyCode: UInt32(key), carbonModifiers: shiftAlt, command: .moveToWorkspace(i + 1)))

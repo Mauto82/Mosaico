@@ -21,6 +21,7 @@ protocol MouseManagerDelegate: AnyObject {
 /// dispatched to main.
 final class MouseManager {
     weak var delegate: MouseManagerDelegate?
+    var willWarpPointer: (() -> Void)?
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -122,6 +123,12 @@ final class MouseManager {
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            return Unmanaged.passUnretained(event)
+        }
+
+        // macOS handles this drag. Feeding it back into our drop handler can
+        // move an unrelated tile when the synthetic mouse-up lands.
+        if EventPoster.isWindowDragEvent(event) {
             return Unmanaged.passUnretained(event)
         }
 
@@ -265,6 +272,7 @@ final class MouseManager {
 
         // No CGAssociateMouseAndMouseCursorPosition here: the pointer is
         // never dissociated, and calling it resets the cursor appearance.
+        willWarpPointer?()
         CGWarpMouseCursorPosition(center)
     }
 }

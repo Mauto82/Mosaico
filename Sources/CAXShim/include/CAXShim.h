@@ -21,5 +21,9 @@ extern CGSConnectionID CGSMainConnectionID(void);
 extern CFArrayRef CGSCopyManagedDisplaySpaces(CGSConnectionID cid);
 // Space id per ogni finestra richiesta (mask 0x7 = tutti gli space)
 extern CFArrayRef CGSCopySpacesForWindows(CGSConnectionID cid, int mask, CFArrayRef windowIDs);
+// Read the current Mission Control shortcut from WindowServer.
+extern bool CGSIsSymbolicHotKeyEnabled(uint32_t hotKey);
+extern CGError CGSGetSymbolicHotKeyValue(uint32_t hotKey, uint16_t *keyEquivalent,
+                                        uint16_t *virtualKeyCode, uint32_t *modifiers);
 
 #endif

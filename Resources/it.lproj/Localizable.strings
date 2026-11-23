@@ -10,6 +10,7 @@
 "Gap between windows: %dpx" = "Spazio tra finestre: %dpx";
 "Mouse" = "Mouse";
 "Pointer follows the focused window" = "Il puntatore segue la finestra attiva";
+"Focus follows mouse" = "Il focus segue il puntatore";
 "Startup" = "Avvio";
 "Launch Mosaico at login" = "Avvia Mosaico al login";
 "macOS needs your approval" = "macOS richiede la tua approvazione";
