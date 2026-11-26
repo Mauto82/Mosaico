@@ -3,6 +3,27 @@ import AppKit
 /// Applies the frames computed by the BSPTree to the real windows.
 enum LayoutEngine {
 
+    /// Windows that refused their last target (a minimum size, typically:
+    /// WhatsApp, Claude, OBS), with the frame they kept. Asking again for
+    /// the same target is wasted work for nothing — every attempt makes the
+    /// app re-lay out its content, and Electron apps pay seconds of CPU for
+    /// it — so the request is repeated only when the target or the window
+    /// itself changes. Main thread only.
+    private static var refusals: [WindowID: (target: CGRect, kept: CGRect)] = [:]
+
+    /// Frame a window kept after refusing its slot, if it did: the hit-test
+    /// must look for it there, not in the slot.
+    static func refusedFrame(of id: WindowID) -> CGRect? {
+        refusals[id]?.kept
+    }
+
+    /// True if the window already refused exactly this target and has not
+    /// moved since.
+    private static func alreadyRefused(_ managed: ManagedWindow, _ target: CGRect, current: CGRect) -> Bool {
+        guard let refusal = refusals[managed.id] else { return false }
+        return rectsEqual(refusal.target, target) && rectsEqual(refusal.kept, current)
+    }
+
     /// Usable workspace rect: visibleFrame − padding.
     static func workspaceRect(for screen: NSScreen) -> CGRect {
         let padding = CGFloat(SettingsStore.shared.settings.padding)
@@ -39,15 +60,21 @@ enum LayoutEngine {
         let started = Date()
         var changed = 0
         for (pid, entries) in byPid {
+            // Read every frame first: an app whose windows are all in place
+            // (or all refused this same target) gets no write at all
+            let pending = entries.filter { managed, target in
+                let current = managed.window.frame
+                return !rectsEqual(current, target) && !alreadyRefused(managed, target, current: current)
+            }
+            guard !pending.isEmpty else { continue }
+
             let app = AXApplication(pid: pid)
             let hadEnhanced = app.enhancedUserInterface
             if hadEnhanced { app.enhancedUserInterface = false }
 
-            for (managed, target) in entries {
-                if !rectsEqual(managed.window.frame, target) {
-                    managed.window.setFrame(target)
-                    changed += 1
-                }
+            for (managed, target) in pending {
+                managed.window.setFrame(target)
+                changed += 1
             }
 
             if hadEnhanced { app.enhancedUserInterface = true }
@@ -75,13 +102,23 @@ enum LayoutEngine {
             guard workspace.layoutGeneration == generation,
                   NSEvent.pressedMouseButtons == 0 else { return }
             for (_, entries) in byPid {
-                for (managed, target) in entries where !rectsEqual(managed.window.frame, target) {
+                for (managed, target) in entries {
+                    let current = managed.window.frame
+                    guard !rectsEqual(current, target) else {
+                        refusals[managed.id] = nil
+                        continue
+                    }
+                    guard !alreadyRefused(managed, target, current: current) else { continue }
                     managed.window.setFrame(target)
                     // A window that still refuses its frame is the classic
                     // source of "one window covers the others": leave the
-                    // evidence in the log.
-                    if !rectsEqual(managed.window.frame, target, tolerance: 10) {
-                        MosaicoLog.log("stubborn [\(managed.id)] keeps \(managed.window.frame), wants \(target)")
+                    // evidence in the log, once, and stop asking.
+                    let kept = managed.window.frame
+                    if !rectsEqual(kept, target, tolerance: 10) {
+                        refusals[managed.id] = (target, kept)
+                        MosaicoLog.log("stubborn [\(managed.id)] keeps \(kept), wants \(target) — not asking again")
+                    } else {
+                        refusals[managed.id] = nil
                     }
                 }
             }

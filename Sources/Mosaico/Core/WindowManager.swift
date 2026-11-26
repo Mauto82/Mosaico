@@ -1328,8 +1328,16 @@ final class WindowManager {
         // border under the cursor (an edge resize).
         let reach: CGFloat = CGFloat(SettingsStore.shared.settings.gap) + 12
         let originDisplay = DisplayManager.displayID(of: screen)
+        // Ask Accessibility only about windows whose slot (or the frame they
+        // kept after refusing it) is near the point: a frame read is a round
+        // trip to the app's main thread, and this runs on EVERY click.
+        let gap = CGFloat(SettingsStore.shared.settings.gap)
+        let slots = workspace.tree.frames(in: LayoutEngine.workspaceRect(for: screen), gap: gap)
+        let near: (CGRect) -> Bool = { $0.insetBy(dx: -reach, dy: -reach).contains(point) }
         for (id, managed) in workspace.windows where !managed.isFloating && !managed.isZoomed {
-            guard let frame = managed.window.frameIfReadable,
+            let expected = [slots[id], LayoutEngine.refusedFrame(of: id)].compactMap { $0 }
+            guard expected.isEmpty || expected.contains(where: near),
+                  let frame = managed.window.frameIfReadable,
                   frame.insetBy(dx: -reach, dy: -reach).contains(point) else { continue }
             dragCandidates.append(DragCandidate(id: id, originalFrame: frame, displayID: originDisplay))
         }
