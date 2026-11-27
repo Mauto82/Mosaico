@@ -342,6 +342,26 @@ enum SelfTest {
                   "l10n: system language resolution")
         }
 
+        // AX back-off: a slow call backs the app off, calls are then skipped
+        // without running; a fast app is never backed off
+        do {
+            let slowPid: pid_t = 999_991, fastPid: pid_t = 999_992
+            AXHealth.forget(slowPid); AXHealth.forget(fastPid)
+            AXHealth.call(fastPid) { .success }
+            check(!AXHealth.isBackedOff(fastPid), "ax back-off: fast app untouched")
+            AXHealth.call(slowPid) { Thread.sleep(forTimeInterval: AXHealth.slowCall + 0.05); return .cannotComplete }
+            check(AXHealth.isBackedOff(slowPid), "ax back-off: timed-out call backs off")
+            let busyPid: pid_t = 999_993
+            AXHealth.forget(busyPid)
+            AXHealth.call(busyPid) { Thread.sleep(forTimeInterval: AXHealth.slowCall + 0.05); return .success }
+            check(!AXHealth.isBackedOff(busyPid), "ax back-off: slow success is not a timeout")
+            var ran = false
+            let err = AXHealth.call(slowPid) { ran = true; return .success }
+            check(!ran && err == .cannotComplete, "ax back-off: calls skipped while backed off")
+            AXHealth.forget(slowPid)
+            check(!AXHealth.isBackedOff(slowPid), "ax back-off: forgotten on quit")
+        }
+
         print(failures == 0 ? "\nALL TESTS PASS" : "\n\(failures) TESTS FAILED")
         if failures > 0 { exit(1) }
     }

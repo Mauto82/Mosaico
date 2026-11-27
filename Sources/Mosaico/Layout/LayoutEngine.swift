@@ -60,6 +60,9 @@ enum LayoutEngine {
         let started = Date()
         var changed = 0
         for (pid, entries) in byPid {
+            // Backed off (see AXHealth): every read would come back empty
+            // and every write would be dropped — leave its windows be
+            guard !AXHealth.isBackedOff(pid) else { continue }
             // Read every frame first: an app whose windows are all in place
             // (or all refused this same target) gets no write at all
             let pending = entries.filter { managed, target in
@@ -101,7 +104,7 @@ enum LayoutEngine {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             guard workspace.layoutGeneration == generation,
                   NSEvent.pressedMouseButtons == 0 else { return }
-            for (_, entries) in byPid {
+            for (pid, entries) in byPid where !AXHealth.isBackedOff(pid) {
                 for (managed, target) in entries {
                     let current = managed.window.frame
                     guard !rectsEqual(current, target) else {

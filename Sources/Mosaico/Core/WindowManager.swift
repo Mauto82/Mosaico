@@ -299,6 +299,7 @@ final class WindowManager {
     }
 
     private func removeApp(pid: pid_t) {
+        AXHealth.forget(pid)
         observerCenter.stopObserving(pid: pid)
         // The runtime exclusions of the terminated app are no longer needed
         runtimeExcluded = runtimeExcluded.filter { $0.value.managed.window.pid != pid }
@@ -501,7 +502,10 @@ final class WindowManager {
         for screen in NSScreen.screens {
             let workspace = workspaceManager.activeWorkspace(for: screen)
             for (id, managed) in workspace.windows where !managed.isFloating {
-                guard managed.window.frameIfReadable == nil else { continue }
+                // A backed-off app reads as unreadable without being broken:
+                // counting those passes would free slots it still owns
+                guard !AXHealth.isBackedOff(managed.window.pid),
+                      managed.window.frameIfReadable == nil else { continue }
                 let passes = (brokenPasses[id] ?? 0) + 1
                 stillBroken[id] = passes
                 guard passes >= 2 else { continue }
@@ -704,6 +708,13 @@ final class WindowManager {
             let unmanagedOwned = snapshot
                 .ids(ownedBy: app.processIdentifier)
                 .filter { workspaceManager.locate($0) == nil }
+
+            // Backed off (see AXHealth): already known not to answer, and
+            // asking costs nothing but must not be reported as news
+            if AXHealth.isBackedOff(app.processIdentifier) {
+                for id in unmanagedOwned { pending[id] = "\(name) not answering" }
+                continue
+            }
 
             guard let axWindows = ax.windows() else {
                 // No answer within the timeout: the app is busy. Leave it

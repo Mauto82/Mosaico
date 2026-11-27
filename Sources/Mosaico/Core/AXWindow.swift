@@ -25,7 +25,7 @@ final class AXWindow {
 
     private func copyAttribute(_ name: String) -> CFTypeRef? {
         var value: CFTypeRef?
-        let err = AXUIElementCopyAttributeValue(element, name as CFString, &value)
+        let err = AXHealth.call(pid) { AXUIElementCopyAttributeValue(element, name as CFString, &value) }
         return err == .success ? value : nil
     }
 
@@ -59,25 +59,25 @@ final class AXWindow {
         guard let parent = copyAttribute(kAXParentAttribute) else { return false }
         let parentElement = parent as! AXUIElement
         var role: CFTypeRef?
-        AXUIElementCopyAttributeValue(parentElement, kAXRoleAttribute as CFString, &role)
+        AXHealth.call(pid) { AXUIElementCopyAttributeValue(parentElement, kAXRoleAttribute as CFString, &role) }
         return (role as? String) == kAXWindowRole
     }
 
     var isResizable: Bool {
         var settable = DarwinBoolean(false)
-        AXUIElementIsAttributeSettable(element, kAXSizeAttribute as CFString, &settable)
+        AXHealth.call(pid) { AXUIElementIsAttributeSettable(element, kAXSizeAttribute as CFString, &settable) }
         return settable.boolValue
     }
 
     var isMovable: Bool {
         var settable = DarwinBoolean(false)
-        AXUIElementIsAttributeSettable(element, kAXPositionAttribute as CFString, &settable)
+        AXHealth.call(pid) { AXUIElementIsAttributeSettable(element, kAXPositionAttribute as CFString, &settable) }
         return settable.boolValue
     }
 
     var isValid: Bool {
         var value: CFTypeRef?
-        return AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &value) == .success
+        return AXHealth.call(pid) { AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &value) } == .success
     }
 
     /// CGWindow layer: 0 = normal window; ≠0 = system floating
@@ -129,14 +129,14 @@ final class AXWindow {
     func setPosition(_ point: CGPoint) {
         var p = point
         if let value = AXValueCreate(.cgPoint, &p) {
-            AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, value)
+            AXHealth.call(pid) { AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, value) }
         }
     }
 
     func setSize(_ size: CGSize) {
         var s = size
         if let value = AXValueCreate(.cgSize, &s) {
-            AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, value)
+            AXHealth.call(pid) { AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, value) }
         }
     }
 
@@ -144,16 +144,16 @@ final class AXWindow {
 
     /// Brings the window above the others without changing focus/active app.
     func raise() {
-        AXUIElementPerformAction(element, kAXRaiseAction as CFString)
+        AXHealth.call(pid) { AXUIElementPerformAction(element, kAXRaiseAction as CFString) }
     }
 
     func focus() {
         if let app = NSRunningApplication(processIdentifier: pid) {
             app.activate()
         }
-        AXUIElementPerformAction(element, kAXRaiseAction as CFString)
-        AXUIElementSetAttributeValue(element, kAXMainAttribute as CFString, kCFBooleanTrue)
-        AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        AXHealth.call(pid) { AXUIElementPerformAction(element, kAXRaiseAction as CFString) }
+        AXHealth.call(pid) { AXUIElementSetAttributeValue(element, kAXMainAttribute as CFString, kCFBooleanTrue) }
+        AXHealth.call(pid) { AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue) }
     }
 }
 
