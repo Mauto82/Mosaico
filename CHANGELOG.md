@@ -5,6 +5,32 @@ All notable changes to Mosaico are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-11-27
+
+### Fixed
+
+- Scrolling in Safari or Chromium apps and switching Spaces stuttered
+  while Mosaico ran. It asked every app to report the destruction of any
+  UI element, not just windows: a scrolling web page destroys elements by
+  the thousand, and each one cost a message to Mosaico plus a window-list
+  query to the window server. Destruction is now watched on each managed
+  window only; more than 300 notifications a minute are logged as an
+  "AX flood"
+- Windows with a minimum size (WhatsApp, Claude, OBS, MainStage,
+  Telegram) were asked again and again for a narrower slot they refuse —
+  up to four resize attempts per layout pass, every few seconds, each
+  making the app re-lay out its content. A refused frame is now
+  remembered and asked again only when the target or the window changes
+- A layout pass toggled AXEnhancedUserInterface on every app even with
+  nothing to move; apps whose windows are in place get no writes at all
+- Every click read the frame of every tiled window on the Space; only the
+  windows near the pointer are read now
+- An app that never answers Accessibility (Windows App holding a remote
+  session) froze Mosaico for 2–5 s after every Space switch, half a
+  second per call. An app that times out is now backed off for 10 s (up
+  to 2 min while it keeps timing out): its calls fail at once, its
+  windows keep their slots, and the first answer clears the back-off
+
 ## [0.4.0] - 2026-11-12
 
 ### Added
