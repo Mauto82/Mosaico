@@ -53,6 +53,9 @@ final class WindowManager {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
     }
 
+    /// A destroyed-window prune is already queued.
+    private var pruneScheduled = false
+
     /// Windows whose traits could not be read yet, with the attempt count.
     private var manageRetries: [WindowID: Int] = [:]
 
@@ -245,6 +248,7 @@ final class WindowManager {
             if workspaceManager.isVisible(workspace) {
                 window.raise()
             }
+            observerCenter.watchDestruction(of: window)
             return .adopted
         }
 
@@ -264,6 +268,7 @@ final class WindowManager {
            }) {
             MosaicoLog.log("tab twin: [\(window.id)] takes over slot of [\(twin.id)]")
             workspace.replace(oldID: twin.id, with: managed)
+            observerCenter.watchDestruction(of: window)
             refreshMenuSnapshot()
             return .adopted
         }
@@ -272,6 +277,7 @@ final class WindowManager {
             self?.frameOfLeaf(id, in: workspace)
         })
         MosaicoLog.log("manage [\(window.id)] '\(window.title ?? "?")' → space \(key.space) (n=\(workspace.tree.count))")
+        observerCenter.watchDestruction(of: window)
         applyLayout(workspace: workspace, screen: screen)
         refreshMenuSnapshot()
         return .adopted
@@ -311,6 +317,7 @@ final class WindowManager {
     }
 
     private func remove(windowID: WindowID) {
+        observerCenter.unwatchDestruction(of: windowID)
         guard let loc = workspaceManager.locate(windowID) else { return }
         loc.workspace.remove(windowID)
         if focusedWindowID == windowID { focusedWindowID = nil }
@@ -320,7 +327,26 @@ final class WindowManager {
 
     // MARK: - AX events
 
+    /// Accessibility notifications received in the current minute: a flood
+    /// means some app reports more than window events, which is what made
+    /// scrolling stutter system-wide — leave the evidence in the log.
+    private var axEventCount = 0
+    private var axEventWindowStart = Date()
+
+    private func countAXEvent(pid: pid_t) {
+        axEventCount += 1
+        let elapsed = Date().timeIntervalSince(axEventWindowStart)
+        guard elapsed >= 60 else { return }
+        if axEventCount > 300 {
+            let app = NSRunningApplication(processIdentifier: pid)?.localizedName ?? "?"
+            MosaicoLog.log(String(format: "AX flood: %d notifications in %.0fs (last from %@)", axEventCount, elapsed, app))
+        }
+        axEventCount = 0
+        axEventWindowStart = Date()
+    }
+
     private func handleAXEvent(pid: pid_t, notification: String, element: AXUIElement) {
+        countAXEvent(pid: pid)
         guard !isPaused else { return }
 
         switch notification {
@@ -336,7 +362,15 @@ final class WindowManager {
             }
 
         case kAXUIElementDestroyedNotification:
-            pruneInvalidWindows()
+            // Only managed windows report it (see AXObserverCenter); still,
+            // closing several at once must cost one prune, not one each
+            guard !pruneScheduled else { return }
+            pruneScheduled = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                guard let self else { return }
+                self.pruneScheduled = false
+                self.pruneInvalidWindows()
+            }
 
         case kAXFocusedWindowChangedNotification:
             guard let window = AXWindow(element: element, pid: pid) else { return }
@@ -350,15 +384,6 @@ final class WindowManager {
             guard let window = AXWindow(element: element, pid: pid) else { return }
             let bundleID = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier
             manage(window: window, bundleID: bundleID)
-
-        case kAXWindowMovedNotification, kAXWindowResizedNotification:
-            // Do NOT adopt here: these notifications also fire when it is
-            // the APP resizing itself (terminals snapping to the cell
-            // grid), creating an apply→snap→adopt→apply loop. Adoption
-            // from a user action happens only on mouse release
-            // (handleDragEnd); periodic reconciliation corrects the
-            // rest. Ignore.
-            break
 
         default:
             break
@@ -556,6 +581,19 @@ final class WindowManager {
         }
     }
 
+    /// Every managed window watched for destruction, and nothing else:
+    /// covers healed handles and registrations that failed at adoption.
+    private func syncDestructionWatches() {
+        var ids = Set<WindowID>()
+        for (_, spaceState) in workspaceManager.spaces {
+            for (id, managed) in spaceState.workspace.windows {
+                ids.insert(id)
+                observerCenter.watchDestruction(of: managed.window)
+            }
+        }
+        observerCenter.keepWatching(only: ids)
+    }
+
     // MARK: - Reconciliation
 
     /// Until this instant reconciliation does NOT modify the structure
@@ -721,6 +759,7 @@ final class WindowManager {
             applyLayout(workspace: workspaceManager.activeWorkspace(for: screen), screen: screen)
         }
 
+        syncDestructionWatches()
         refreshMenuSnapshot()
 
         // A slow pass is a freeze from the user's side: leave the evidence
